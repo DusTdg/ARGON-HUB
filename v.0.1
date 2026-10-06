@@ -1,0 +1,357 @@
+-- ESP + Aimlock with Rayfield Gen2 UI
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+local lp = Players.LocalPlayer
+
+local keyMap = {
+    ["Right Click"] = Enum.UserInputType.MouseButton2,
+    ["Middle Click"] = Enum.UserInputType.MouseButton3,
+    ["Left Click"] = Enum.UserInputType.MouseButton1,
+    ["Q"] = Enum.KeyCode.Q,
+    ["E"] = Enum.KeyCode.E,
+    ["C"] = Enum.KeyCode.C,
+    ["F"] = Enum.KeyCode.F,
+    ["Left Shift"] = Enum.KeyCode.LeftShift,
+    ["Left Alt"] = Enum.KeyCode.LeftAlt,
+}
+
+local CFG = {
+    espEnabled     = true,
+    showBoxes      = true,
+    showTracers    = true,
+    showNames      = true,
+    showHealth     = true,
+    showDistance   = true,
+    teamCheck      = true,
+    maxDist        = 200,
+    enemyColor     = Color3.fromRGB(255, 60, 60),
+    teamColor      = Color3.fromRGB(60, 255, 120),
+    tracerColor    = Color3.fromRGB(255, 200, 0),
+    aimlockEnabled = true,
+    aimlockKey     = Enum.UserInputType.MouseButton2, -- Default right click
+    aimPart        = "Head",
+    aimSmoothing   = 0.15,
+    fovRadius      = 150,
+    showFOV        = true,
+    fovColor       = Color3.fromRGB(255, 255, 255),
+}
+
+-- ===== WINDOW =====
+local window = Rayfield:CreateWindow({
+    name = "KhunproCheats",
+    subtitle = "ESP + Aimlock",
+    configuration = { autoSave = false },
+})
+
+-- RGB Title Logic
+task.spawn(function()
+    local CoreGui = game:GetService("CoreGui")
+    local labels = {}
+    task.wait(1.5)
+    for _, obj in ipairs(CoreGui:GetDescendants()) do
+        if obj:IsA("TextLabel") and obj.Text == "KhunproCheats" then
+            table.insert(labels, obj)
+        end
+    end
+    if #labels > 0 then
+        local rgbConn = RunService.RenderStepped:Connect(function()
+            local hue = (tick() % 4) / 4
+            local color = Color3.fromHSV(hue, 1, 1)
+            for _, lbl in ipairs(labels) do
+                if lbl.Parent then
+                    lbl.TextColor3 = color
+                end
+            end
+        end)
+        STATE.onCleanup(function() rgbConn:Disconnect() end)
+    end
+end)
+
+local tabESP    = window:CreateTab({ name = "ESP" })
+local tabAim    = window:CreateTab({ name = "Aimlock" })
+local tabColors = window:CreateTab({ name = "Colors" })
+
+-- ===== ESP TAB =====
+tabESP:CreateToggle({ name = "Enable ESP",           value = CFG.espEnabled,     callback = function(v) CFG.espEnabled = v end })
+tabESP:CreateToggle({ name = "Show Boxes",            value = CFG.showBoxes,      callback = function(v) CFG.showBoxes = v end })
+tabESP:CreateToggle({ name = "Show Tracers",          value = CFG.showTracers,    callback = function(v) CFG.showTracers = v end })
+tabESP:CreateToggle({ name = "Show Names",            value = CFG.showNames,      callback = function(v) CFG.showNames = v end })
+tabESP:CreateToggle({ name = "Show Health Bar",       value = CFG.showHealth,     callback = function(v) CFG.showHealth = v end })
+tabESP:CreateToggle({ name = "Show Distance",         value = CFG.showDistance,   callback = function(v) CFG.showDistance = v end })
+tabESP:CreateToggle({ name = "Enemy Only (Team Check)",value = CFG.teamCheck,     callback = function(v) CFG.teamCheck = v end })
+tabESP:CreateSlider({
+    name = "Max Distance", range = {10, 500}, increment = 10,
+    suffix = "m", value = CFG.maxDist,
+    callback = function(v) CFG.maxDist = v end,
+})
+tabESP:CreateInput({
+    name = "Max Distance (type exact)", placeholder = "e.g. 200", numeric = true,
+    callback = function(v) local n = tonumber(v); if n then CFG.maxDist = math.clamp(n, 1, 500) end end,
+})
+
+-- ===== AIMLOCK TAB =====
+tabAim:CreateToggle({ name = "Enable Aimlock",  value = CFG.aimlockEnabled, callback = function(v) CFG.aimlockEnabled = v end })
+tabAim:CreateToggle({ name = "Show FOV Circle", value = CFG.showFOV,        callback = function(v) CFG.showFOV = v end })
+tabAim:CreateDropdown({
+    name = "Aimlock Key",
+    options = {"Right Click", "Middle Click", "Left Click", "Q", "E", "C", "F", "Left Shift", "Left Alt"},
+    value = "Right Click",
+    callback = function(sel)
+        local v = type(sel) == "table" and sel[1] or sel
+        CFG.aimlockKey = keyMap[v]
+    end,
+})
+tabAim:CreateDropdown({
+    name = "Aim Part",
+    options = {"Head", "HumanoidRootPart", "Hitbox", "UpperTorso"},
+    value = "Head",
+    callback = function(v) CFG.aimPart = type(v) == "table" and v[1] or v end,
+})
+tabAim:CreateSlider({
+    name = "Smoothing", range = {0, 100}, increment = 1,
+    suffix = "%", value = math.floor(CFG.aimSmoothing * 100),
+    callback = function(v) CFG.aimSmoothing = v / 100 end,
+})
+tabAim:CreateSlider({
+    name = "FOV Radius", range = {20, 500}, increment = 5,
+    suffix = "px", value = CFG.fovRadius,
+    callback = function(v) CFG.fovRadius = v end,
+})
+
+-- ===== COLORS TAB =====
+tabColors:CreateColorPicker({ name = "Enemy Color",  color = CFG.enemyColor,  callback = function(c) CFG.enemyColor  = c end })
+tabColors:CreateColorPicker({ name = "Team Color",   color = CFG.teamColor,   callback = function(c) CFG.teamColor   = c end })
+tabColors:CreateColorPicker({ name = "Tracer Color", color = CFG.tracerColor, callback = function(c) CFG.tracerColor = c end })
+tabColors:CreateColorPicker({ name = "FOV Color",    color = CFG.fovColor,    callback = function(c) CFG.fovColor    = c; fovCircle.Color = c end })
+
+-- ===== DRAWINGS =====
+local drawings = {}
+local function newDraw(t, props)
+    local d = Drawing.new(t)
+    for k,v in pairs(props) do d[k] = v end
+    table.insert(drawings, d)
+    return d
+end
+local playerDrawings = {}
+local function getPD(name)
+    if not playerDrawings[name] then
+        playerDrawings[name] = {
+            boxTL    = newDraw("Line", {Thickness=1.5, Visible=false}),
+            boxTR    = newDraw("Line", {Thickness=1.5, Visible=false}),
+            boxBL    = newDraw("Line", {Thickness=1.5, Visible=false}),
+            boxBR    = newDraw("Line", {Thickness=1.5, Visible=false}),
+            tracer   = newDraw("Line", {Thickness=1.2, Visible=false}),
+            nameText = newDraw("Text", {Size=13, Center=true, Outline=true, OutlineColor=Color3.new(0,0,0), Visible=false}),
+            healthBg = newDraw("Line", {Thickness=5, Visible=false, Color=Color3.fromRGB(30,30,30)}),
+            healthFill = newDraw("Line", {Thickness=3, Visible=false}),
+            distText = newDraw("Text", {Size=11, Center=true, Outline=true, OutlineColor=Color3.new(0,0,0), Visible=false}),
+        }
+    end
+    return playerDrawings[name]
+end
+local fovCircle = Drawing.new("Circle")
+fovCircle.Radius = CFG.fovRadius
+fovCircle.Color = CFG.fovColor
+fovCircle.Thickness = 1.5
+fovCircle.Filled = false
+fovCircle.Visible = true
+table.insert(drawings, fovCircle)
+
+-- ===== HELPERS =====
+local function isEnemy(p)
+    if not CFG.teamCheck then return true end
+    if p == lp then return false end
+    
+    -- Arsenal Specific Team Check
+    local s1 = p:FindFirstChild("Status")
+    local s2 = lp:FindFirstChild("Status")
+    if s1 and s2 then
+        local t1 = s1:FindFirstChild("Team")
+        local t2 = s2:FindFirstChild("Team")
+        if t1 and t2 and t1.Value == t2.Value then return false end
+    end
+
+    if p.Team and lp.Team and p.Team == lp.Team then return false end
+    if p.TeamColor and lp.TeamColor and p.TeamColor == lp.TeamColor then return false end
+    return true
+end
+
+local function isAlive(p)
+    local c = p.Character
+    if not c or c.Parent ~= workspace then return false end
+    
+    -- Arsenal Specific Alive Checks
+    local status = p:FindFirstChild("Status")
+    if status then
+        local alive = status:FindFirstChild("Alive")
+        if alive and alive.Value == false then return false end
+    end
+    local nrpbs = p:FindFirstChild("NRPBS")
+    if nrpbs then
+        local hp = nrpbs:FindFirstChild("Health")
+        if hp and hp.Value <= 0 then return false end
+    end
+
+    local h = c:FindFirstChildOfClass("Humanoid")
+    if not h or h.Health <= 0 then return false end
+    
+    -- Anti-ground lock (target falling through map)
+    local hrp = c:FindFirstChild("HumanoidRootPart")
+    if hrp and hrp.Position.Y < -20 then return false end
+
+    return true
+end
+
+local function toVP(pos3)
+    local p2, vis = Camera:WorldToViewportPoint(pos3)
+    return Vector2.new(p2.X, p2.Y), vis, p2.Z
+end
+
+-- ===== AIMLOCK STATE =====
+local aimlockHeld = false
+local aimlockTarget = nil
+
+local function getClosest()
+    local center = Camera.ViewportSize / 2
+    local best, bestD = nil, math.huge
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= lp and isEnemy(p) and isAlive(p) then
+            local c = p.Character
+            local part = c and (c:FindFirstChild(CFG.aimPart) or c:FindFirstChild("HumanoidRootPart"))
+            if part then
+                local s2, on = toVP(part.Position)
+                if on then
+                    local d = (s2 - center).Magnitude
+                    if d < CFG.fovRadius and d < bestD then bestD = d; best = p end
+                end
+            end
+        end
+    end
+    return best
+end
+
+local function isAimKey(inp)
+    if not CFG.aimlockKey then return false end
+    if CFG.aimlockKey.EnumType == Enum.KeyCode then
+        return inp.KeyCode == CFG.aimlockKey
+    elseif CFG.aimlockKey.EnumType == Enum.UserInputType then
+        return inp.UserInputType == CFG.aimlockKey
+    end
+    return false
+end
+
+local inputBegan = UserInputService.InputBegan:Connect(function(inp, gpe)
+    if gpe and inp.UserInputType ~= Enum.UserInputType.MouseButton2 and inp.UserInputType ~= Enum.UserInputType.MouseButton3 and inp.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+    if isAimKey(inp) then
+        aimlockHeld = true; aimlockTarget = getClosest()
+    end
+end)
+local inputEnded = UserInputService.InputEnded:Connect(function(inp)
+    if isAimKey(inp) then 
+        aimlockHeld = false; aimlockTarget = nil 
+    end
+end)
+
+-- ===== RENDER LOOP =====
+local conn = RunService.RenderStepped:Connect(function()
+    local ss = Camera.ViewportSize
+    local sc = ss / 2
+    fovCircle.Position = sc
+    fovCircle.Radius = CFG.fovRadius
+    fovCircle.Color = CFG.fovColor
+    fovCircle.Visible = CFG.showFOV and CFG.aimlockEnabled
+
+    -- Revalidate target (cancel aim if dead/no longer enemy/respawned)
+    if aimlockHeld and aimlockTarget then
+        if not isAlive(aimlockTarget) or not isEnemy(aimlockTarget) then
+            aimlockTarget = getClosest()
+        end
+    end
+
+    if aimlockHeld and aimlockTarget and CFG.aimlockEnabled then
+        local c = aimlockTarget.Character
+        local part = c and (c:FindFirstChild(CFG.aimPart) or c:FindFirstChild("HumanoidRootPart"))
+        if part then
+            Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, part.Position), CFG.aimSmoothing)
+        end
+    end
+
+    local seen = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == lp then continue end
+        local c = p.Character
+        local d = getPD(p.Name)
+        seen[p.Name] = true
+        
+        if not CFG.espEnabled or not c or not isAlive(p) or not isEnemy(p) then
+            for _, dr in pairs(d) do dr.Visible = false end; continue
+        end
+        
+        local hum = c:FindFirstChildOfClass("Humanoid")
+        local hrp = c:FindFirstChild("HumanoidRootPart")
+        local head = c:FindFirstChild("Head")
+        if not hrp or not head then for _, dr in pairs(d) do dr.Visible = false end; continue end
+        local rootPos, onScreen, depth = toVP(hrp.Position)
+        if not onScreen or depth <= 0 then for _, dr in pairs(d) do dr.Visible = false end; continue end
+        local dist = (hrp.Position - Camera.CFrame.Position).Magnitude
+        if dist > CFG.maxDist then for _, dr in pairs(d) do dr.Visible = false end; continue end
+        
+        local col = CFG.enemyColor
+        local headPos2 = toVP(head.Position + Vector3.new(0, 0.7, 0))
+        local feetPos2 = toVP(hrp.Position - Vector3.new(0, 2.8, 0))
+        local boxH = math.abs(headPos2.Y - feetPos2.Y)
+        local boxW = boxH * 0.55
+        local cx = rootPos.X
+        local top = math.min(headPos2.Y, feetPos2.Y)
+        local bot = math.max(headPos2.Y, feetPos2.Y)
+        local left = cx - boxW/2; local right = cx + boxW/2
+        
+        if CFG.showBoxes then
+            d.boxTL.From=Vector2.new(left,top)  d.boxTL.To=Vector2.new(right,top) d.boxTL.Color=col d.boxTL.Visible=true
+            d.boxTR.From=Vector2.new(left,bot)  d.boxTR.To=Vector2.new(right,bot) d.boxTR.Color=col d.boxTR.Visible=true
+            d.boxBL.From=Vector2.new(left,top)  d.boxBL.To=Vector2.new(left,bot)  d.boxBL.Color=col d.boxBL.Visible=true
+            d.boxBR.From=Vector2.new(right,top) d.boxBR.To=Vector2.new(right,bot) d.boxBR.Color=col d.boxBR.Visible=true
+        else d.boxTL.Visible=false d.boxTR.Visible=false d.boxBL.Visible=false d.boxBR.Visible=false end
+        
+        if CFG.showTracers then
+            d.tracer.From=Vector2.new(sc.X,ss.Y) d.tracer.To=rootPos d.tracer.Color=CFG.tracerColor d.tracer.Visible=true
+        else d.tracer.Visible=false end
+        
+        if CFG.showNames then
+            local dn = p.DisplayName
+            if p.DisplayName ~= p.Name then dn = p.DisplayName.." (@"..p.Name..")" end
+            d.nameText.Text=dn d.nameText.Position=Vector2.new(cx,top-16) d.nameText.Color=col d.nameText.Visible=true
+        else d.nameText.Visible=false end
+        
+        if CFG.showHealth and hum then
+            local hp = hum.Health/hum.MaxHealth; local bl = left-6
+            d.healthBg.From=Vector2.new(bl,top) d.healthBg.To=Vector2.new(bl,bot) d.healthBg.Visible=true
+            d.healthFill.From=Vector2.new(bl,bot) d.healthFill.To=Vector2.new(bl,bot-boxH*hp)
+            d.healthFill.Color=Color3.fromHSV(hp*0.33,1,1) d.healthFill.Visible=true
+        else d.healthBg.Visible=false d.healthFill.Visible=false end
+        
+        if CFG.showDistance then
+            d.distText.Text=string.format("[%.0fm]",dist)
+            d.distText.Position=Vector2.new(cx,bot+3) d.distText.Color=Color3.fromRGB(200,200,200) d.distText.Visible=true
+        else d.distText.Visible=false end
+    end
+    for name in pairs(playerDrawings) do
+        if not seen[name] then for _, dr in pairs(playerDrawings[name]) do dr.Visible = false end end
+    end
+end)
+
+STATE.onCleanup(function()
+    conn:Disconnect()
+    inputBegan:Disconnect()
+    inputEnded:Disconnect()
+    for _, d in ipairs(drawings) do d:Remove() end
+    fovCircle:Remove()
+    drawings = {}; playerDrawings = {}
+    pcall(function() window:Unload() end)
+end)
+
+print("[KhunproCheats] Arsenal Perfect Fix applied!")
